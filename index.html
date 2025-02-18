@@ -20,6 +20,7 @@
                 display: block;
                 border: none;
                 box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+                background-color: #4ec0ca;
             }
 
             .overlay {
@@ -54,131 +55,315 @@
                 font-size: 0.8em;
                 text-shadow: 2px 2px 4px #000000;
             }
+
+            .score-display {
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                color: white;
+                font-size: 1.5em;
+                text-shadow: 2px 2px 4px #000000;
+            }
+
+            .high-score-display {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                color: rgba(255, 255, 255, 0.8);
+                font-size: 1em;
+                text-shadow: 1px 1px 2px #000000;
+                text-align: right;
+            }
+
+            .collected-letters-display {
+                position: absolute;
+                bottom: 10px;
+                left: 10px;
+                color: white;
+                font-size: 1em;
+                text-shadow: 1px 1px 2px #000000;
+            }
         </style>
     </head>
     <body>
         <canvas id="gameCanvas" width="400" height="600"></canvas>
         <div id="overlay" class="overlay"></div>
+        <div id="scoreDisplay" class="score-display">Score: 0</div>
+        <div id="highScoreDisplay" class="high-score-display">High Score: 0</div>
+        <div id="collectedLettersDisplay" class="collected-letters-display">Letters:</div>
 
         <script>
             const canvas = document.getElementById("gameCanvas");
             const ctx = canvas.getContext("2d");
             const overlay = document.getElementById("overlay");
+            const scoreDisplay = document.getElementById("scoreDisplay");
+            const highScoreDisplay = document.getElementById("highScoreDisplay");
+            const collectedLettersDisplay = document.getElementById("collectedLettersDisplay");
 
             const birdEmoji = "🐦";
+            const availableLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            const wordsToCollect = ["APPLE", "HOUSE", "TRAIN", "CLOUD", "RIVER"];
+            let currentWordIndex = 0;
+            let currentWord = wordsToCollect[currentWordIndex];
+            let collectedWordLetters = [];
 
-            const game = {
-                bird: {
-                    x: 80,
-                    y: 200,
-                    size: 25,
-                    velocityY: 0,
-                    gravity: 0.6,
-                    jumpStrength: -12,
-                },
-                pipes: [],
-                pipeSpacing: 220,
-                pipeWidth: 60,
-                pipeGap: 160,
-                pipeSpeed: 2.5,
-                score: 0,
-                gameStarted: false,
-                gameOver: false,
-                highScore: localStorage.getItem("highScore") || 0,
-            };
+            class Bird {
+                constructor() {
+                    this.x = 80;
+                    this.y = 200;
+                    this.size = 25;
+                    this.velocityY = 0;
+                    this.gravity = 0.6;
+                    this.jumpStrength = -12;
+                }
 
-            function resetGame() {
-                game.bird.y = 200;
-                game.bird.velocityY = 0;
-                game.pipes = [];
-                game.score = 0;
-                game.gameStarted = false;
-                game.gameOver = false;
-                game.pipes.push(createPipe());
-                hideOverlay();
+                draw() {
+                    ctx.font = `${this.size}px serif`;
+                    ctx.fillStyle = "white";
+                    ctx.shadowColor = "black";
+                    ctx.shadowOffsetX = 2;
+                    ctx.shadowOffsetY = 2;
+                    ctx.shadowBlur = 3;
+                    ctx.fillText(birdEmoji, this.x - this.size / 2, this.y + this.size / 2 - 5);
+                    ctx.shadowColor = "transparent";
+                }
+
+                update() {
+                    this.velocityY += this.gravity;
+                    this.y += this.velocityY;
+                }
+
+                jump() {
+                    this.velocityY = this.jumpStrength;
+                }
             }
 
-            function createPipe() {
-                const minPipeHeight = 50;
-                const maxPipeHeight = canvas.height / 2;
-                const topPipeHeight = Math.random() * (maxPipeHeight - minPipeHeight) + minPipeHeight;
-                const bottomPipeY = topPipeHeight + game.pipeGap;
-                return {
-                    x: canvas.width,
-                    topPipeHeight: topPipeHeight,
-                    bottomPipeY: bottomPipeY,
-                };
-            }
+            class Pipe {
+                constructor(x, letter) {
+                    this.x = x;
+                    this.width = 60;
+                    this.gap = 160;
+                    this.speed = 2.5;
+                    this.minHeight = 50;
+                    this.maxHeight = canvas.height / 2;
+                    this.topPipeHeight = Math.random() * (this.maxHeight - this.minHeight) + this.minHeight;
+                    this.bottomPipeY = this.topPipeHeight + this.gap;
+                    this.letter = letter;
+                    this.collected = false;
+                }
 
-            function drawBackground() {
-                const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-                skyGradient.addColorStop(0, "#87CEEB");
-                skyGradient.addColorStop(0.5, "#87CEEB");
-                skyGradient.addColorStop(1, "#E0F7FA");
-                ctx.fillStyle = skyGradient;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                const groundGradient = ctx.createLinearGradient(0, canvas.height - 100, 0, canvas.height);
-                groundGradient.addColorStop(0, "#DAA520");
-                groundGradient.addColorStop(1, "#B8860B");
-                ctx.fillStyle = groundGradient;
-                ctx.fillRect(0, canvas.height - 100, canvas.width, 100);
-            }
-
-            function drawBird() {
-                ctx.font = `${game.bird.size}px serif`;
-                ctx.fillStyle = "white";
-                ctx.shadowColor = "black";
-                ctx.shadowOffsetX = 2;
-                ctx.shadowOffsetY = 2;
-                ctx.shadowBlur = 3;
-                ctx.fillText(birdEmoji, game.bird.x - game.bird.size / 2, game.bird.y + game.bird.size / 2 - 5);
-                ctx.shadowColor = "transparent";
-            }
-
-            function drawPipes() {
-                for (let i = 0; i < game.pipes.length; i++) {
-                    const pipe = game.pipes[i];
-
-                    const pipeGradient = ctx.createLinearGradient(pipe.x, 0, pipe.x + game.pipeWidth, 0);
+                draw() {
+                    const pipeGradient = ctx.createLinearGradient(this.x, 0, this.x + this.width, 0);
                     pipeGradient.addColorStop(0, "#32CD32");
                     pipeGradient.addColorStop(1, "#228B22");
                     ctx.fillStyle = pipeGradient;
 
-                    ctx.fillRect(pipe.x, 0, game.pipeWidth, pipe.topPipeHeight);
-                    ctx.fillRect(pipe.x, pipe.bottomPipeY, game.pipeWidth, canvas.height - pipe.bottomPipeY);
+                    ctx.fillRect(this.x, 0, this.width, this.topPipeHeight);
+                    ctx.fillRect(this.x, this.bottomPipeY, this.width, canvas.height - this.bottomPipeY);
 
                     ctx.fillStyle = "#228B22";
-                    ctx.fillRect(pipe.x - 5, pipe.topPipeHeight - 20, game.pipeWidth + 10, 20);
-                    ctx.fillRect(pipe.x - 5, pipe.bottomPipeY, game.pipeWidth + 10, 20);
+                    ctx.fillRect(this.x - 5, this.topPipeHeight - 20, this.width + 10, 20);
+                    ctx.fillRect(this.x - 5, this.bottomPipeY, this.width + 10, 20);
+
+                    ctx.fillStyle = "white";
+                    ctx.font = "24px Arial";
+                    ctx.textAlign = "center";
+                    ctx.fillText(this.letter, this.x + this.width / 2, this.topPipeHeight + this.gap / 2 + 8);
+                    ctx.textAlign = "start";
+                }
+
+                update() {
+                    this.x -= this.speed;
                 }
             }
 
-            function drawScore() {
-                ctx.fillStyle = "white";
-                ctx.font = "32px Arial";
-                ctx.textAlign = "center";
-                ctx.shadowColor = "black";
-                ctx.shadowOffsetX = 2;
-                ctx.shadowOffsetY = 2;
-                ctx.shadowBlur = 3;
-                ctx.fillText("Score: " + game.score, canvas.width / 2, 50);
-                ctx.shadowColor = "transparent";
-                ctx.textAlign = "start";
-            }
+            const game = {
+                bird: new Bird(),
+                pipes: [],
+                pipeSpacing: 220,
+                score: 0,
+                gameStarted: false,
+                gameOver: false,
+                highScore: localStorage.getItem("highScore") || 0,
+                collectedLetters: [],
+                wordLettersNeeded: [],
 
-            function drawHighScore() {
-                ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-                ctx.font = "16px Arial";
-                ctx.textAlign = "right";
-                ctx.shadowColor = "black";
-                ctx.shadowOffsetX = 1;
-                ctx.shadowOffsetY = 1;
-                ctx.shadowBlur = 2;
-                ctx.fillText("High Score: " + game.highScore, canvas.width - 10, 30);
-                ctx.shadowColor = "transparent";
-                ctx.textAlign = "start";
-            }
+                resetGame() {
+                    this.bird = new Bird();
+                    this.pipes = [];
+                    this.score = 0;
+                    this.gameStarted = false;
+                    this.gameOver = false;
+                    this.collectedLetters = [];
+                    currentWordIndex = 0;
+                    currentWord = wordsToCollect[currentWordIndex];
+                    collectedWordLetters = [];
+                    this.wordLettersNeeded = [...currentWord];
+                    this.generateWordPipes();
+                    hideOverlay();
+                    this.updateScoreDisplay();
+                    this.updateHighScoreDisplay();
+                    this.updateCollectedLettersDisplay();
+                },
+
+                generateWordPipes() {
+                    this.pipes = [];
+                    let currentX = canvas.width;
+                    for (let i = 0; i < currentWord.length; i++) {
+                        this.pipes.push(new Pipe(currentX, currentWord[i]));
+                        currentX += this.pipeSpacing * 2;
+                    }
+                    for (let i = 0; i < 5; i++) { // Add some extra random pipes after the word
+                        this.pipes.push(new Pipe(currentX, availableLetters.charAt(Math.floor(Math.random() * availableLetters.length))));
+                        currentX += this.pipeSpacing;
+                    }
+                },
+
+
+                updateScoreDisplay() {
+                    scoreDisplay.textContent = `Score: ${this.score}`;
+                },
+
+                updateHighScoreDisplay() {
+                    highScoreDisplay.textContent = `High Score: ${this.highScore}`;
+                },
+
+                updateCollectedLettersDisplay() {
+                    collectedLettersDisplay.textContent = `Word: ${collectedWordLetters.join("")} - Find: ${currentWord}`;
+                },
+
+                drawBackground() {
+                    const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height - 100);
+                    skyGradient.addColorStop(0, "#71c5cf");
+                    skyGradient.addColorStop(1, "#a0d6e4");
+                    ctx.fillStyle = skyGradient;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height - 100);
+
+                    const groundGradient = ctx.createLinearGradient(0, canvas.height - 100, 0, canvas.height);
+                    groundGradient.addColorStop(0, "#daa520");
+                    groundGradient.addColorStop(1, "#b8860b");
+                    ctx.fillStyle = groundGradient;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                },
+
+                drawPipes() {
+                    for (let i = 0; i < this.pipes.length; i++) {
+                        this.pipes[i].draw();
+                    }
+                },
+
+                updatePipes() {
+
+
+                    for (let i = 0; i < this.pipes.length; i++) {
+                        const pipe = this.pipes[i];
+                        pipe.update();
+
+                        if (pipe.x + pipe.width < 0) {
+                            this.pipes.splice(i, 1);
+                            i--;
+                            this.score++;
+                            this.updateScoreDisplay();
+                        }
+
+                        if (
+                            !pipe.collected &&
+                            this.bird.x + this.bird.size / 2 > pipe.x &&
+                            this.bird.x - this.bird.size / 2 < pipe.x + pipe.width &&
+                            this.bird.y > pipe.topPipeHeight &&
+                            this.bird.y < pipe.bottomPipeY
+                        ) {
+                            if (this.wordLettersNeeded.length > 0 && pipe.letter === this.wordLettersNeeded[0]) {
+                                collectedWordLetters.push(pipe.letter);
+                                this.wordLettersNeeded.shift();
+                                this.updateCollectedLettersDisplay();
+                                if (this.wordLettersNeeded.length === 0) {
+                                    currentWordIndex++;
+                                    if (currentWordIndex < wordsToCollect.length) {
+                                        currentWord = wordsToCollect[currentWordIndex];
+                                        game.resetGame(); // Reset to next word
+                                    } else {
+                                        currentWord = "YOU WIN!"; // Game completed
+                                        game.gameOver = true;
+                                    }
+
+                                }
+                            } else if (!wordsToCollect[currentWordIndex]){
+                                game.gameOver = true; // Handle win condition if needed
+                            }
+                            pipe.collected = true;
+                        }
+
+                        if (
+                            this.bird.x + this.bird.size / 2 > pipe.x &&
+                            this.bird.x - this.bird.size / 2 < pipe.x + pipe.width &&
+                            (this.bird.y - this.bird.size / 2 < pipe.topPipeHeight ||
+                                this.bird.y + this.bird.size / 2 > pipe.bottomPipeY)
+                        ) {
+                            this.gameOver = true;
+                            if (this.score > this.highScore) {
+                                this.highScore = this.score;
+                                localStorage.setItem("highScore", this.highScore);
+                                this.updateHighScoreDisplay();
+                            }
+                        }
+                    }
+                },
+
+                updateGameArea() {
+                    this.drawBackground();
+                    this.drawPipes();
+                    this.bird.draw();
+                    this.updatePipes();
+                    this.bird.update();
+
+                    if (
+                        this.bird.y + this.bird.size / 2 > canvas.height - 100 ||
+                        this.bird.y - this.bird.size / 2 < 0
+                    ) {
+                        this.gameOver = true;
+                        if (this.score > this.highScore) {
+                            this.highScore = this.score;
+                            localStorage.setItem("highScore", this.highScore);
+                            this.updateHighScoreDisplay();
+                        }
+                    }
+                },
+
+                gameLoop() {
+                    if (!this.gameStarted) {
+                        drawStartScreen();
+                        return;
+                    }
+
+                    if (this.gameOver) {
+                        drawGameOverScreen();
+                        return;
+                    }
+
+                    game.updateGameArea();
+                    requestAnimationFrame(game.gameLoop.bind(game));
+                },
+
+                startGame() {
+                    this.gameStarted = true;
+                    hideOverlay();
+                    game.gameLoop();
+                },
+
+                jump() {
+                    if (!this.gameStarted) {
+                        this.startGame();
+                        return;
+                    }
+                    if (!this.gameOver) {
+                        this.bird.jump();
+                    } else {
+                        this.resetGame();
+                        this.startGame();
+                    }
+                },
+            };
 
             function showOverlay(text, buttonText, buttonAction) {
                 overlay.innerHTML = `<div class="overlay-text">${text}</div>${
@@ -197,107 +382,38 @@
             }
 
             function drawStartScreen() {
-                showOverlay("Tap or Space to Start<br>Flappy Bird Clone", "Start Game", startGame);
+                game.drawBackground();
+                game.drawPipes();
+                game.bird.draw();
+                showOverlay("Tap or Space to Start<br>Flappy Bird Clone<br>Collect letters to form words!", "Start Game", game.startGame.bind(game));
             }
 
             function drawGameOverScreen() {
-                const gameOverText = `Game Over!<br>Your Score: ${game.score} 💀`;
+                game.drawBackground();
+                game.drawPipes();
+                game.bird.draw();
+                let gameOverText = `Game Over!<br>Your Score: ${game.score} 💀`;
+                if (currentWord === "YOU WIN!") {
+                    gameOverText = `🎉 YOU WIN! 🎉<br>You collected all words!`;
+                } else {
+                    gameOverText = `Game Over!<br>Your Score: ${game.score} 💀<br>Word was: ${currentWord}`;
+                }
+
                 const highScoreText =
                     game.score > game.highScore ? `<br>🎉 New High Score! 🎉` : `<br>High Score: ${game.highScore}`;
-                showOverlay(gameOverText + highScoreText, "Restart Game", resetGame);
-            }
-
-            function startGame() {
-                game.gameStarted = true;
-                hideOverlay();
-                updateGame();
-            }
-
-            function updateGame() {
-                if (!game.gameStarted) {
-                    drawStartScreen();
-                    return;
-                }
-
-                if (game.gameOver) {
-                    drawGameOverScreen();
-                    return;
-                }
-
-                drawBackground();
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                drawBackground();
-
-                game.bird.velocityY += game.bird.gravity;
-                game.bird.y += game.bird.velocityY;
-
-                if (game.bird.y + game.bird.size / 2 > canvas.height - 100 || game.bird.y - game.bird.size / 2 < 0) {
-                    game.gameOver = true;
-                    if (game.score > game.highScore) {
-                        game.highScore = game.score;
-                        localStorage.setItem("highScore", game.highScore);
-                    }
-                }
-
-                if (game.pipes.length === 0 || game.pipes[game.pipes.length - 1].x < canvas.width - game.pipeSpacing) {
-                    game.pipes.push(createPipe());
-                }
-
-                for (let i = 0; i < game.pipes.length; i++) {
-                    const pipe = game.pipes[i];
-                    pipe.x -= game.pipeSpeed;
-
-                    if (pipe.x + game.pipeWidth < 0) {
-                        game.pipes.splice(i, 1);
-                        i--;
-                        game.score++;
-                    }
-
-                    if (
-                        game.bird.x + game.bird.size / 2 > pipe.x &&
-                        game.bird.x - game.bird.size / 2 < pipe.x + game.pipeWidth &&
-                        (game.bird.y - game.bird.size / 2 < pipe.topPipeHeight ||
-                            game.bird.y + game.bird.size / 2 > pipe.bottomPipeY)
-                    ) {
-                        game.gameOver = true;
-                        if (game.score > game.highScore) {
-                            game.highScore = game.score;
-                            localStorage.setItem("highScore", game.highScore);
-                        }
-                    }
-                }
-
-                drawPipes();
-                drawBird();
-                drawScore();
-                drawHighScore();
-
-                requestAnimationFrame(updateGame);
-            }
-
-            function jump() {
-                if (!game.gameStarted) {
-                    startGame();
-                    return;
-                }
-                if (!game.gameOver) {
-                    game.bird.velocityY = game.bird.jumpStrength;
-                } else {
-                    resetGame();
-                    startGame();
-                }
+                showOverlay(gameOverText, "Restart Game", game.resetGame.bind(game));
             }
 
             document.addEventListener("keydown", function (event) {
                 if (event.code === "Space") {
-                    jump();
+                    game.jump();
                 }
             });
 
-            canvas.addEventListener("mousedown", jump);
-            canvas.addEventListener("touchstart", jump);
+            canvas.addEventListener("mousedown", game.jump.bind(game));
+            canvas.addEventListener("touchstart", game.jump.bind(game));
 
-            resetGame();
+            game.resetGame();
             drawStartScreen();
         </script>
     </body>
