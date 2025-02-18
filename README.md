@@ -76,6 +76,4 @@ A simple Flappy Bird game implemented using HTML5, CSS, and JavaScript.
 
 # TODO
 
--   Use emoji for bird (🐦, 🕊️) as a quick visual update.
--   Design and implement nicer pipe graphics, potentially using simple shapes with gradients or textures.
--   Add a basic sky background, starting with a simple gradient.
+-   Add music
