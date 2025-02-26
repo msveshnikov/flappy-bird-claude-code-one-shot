@@ -13,16 +13,17 @@
         justify-content: center;
         align-items: center;
         height: 100vh;
-        font-family: Arial, sans-serif;
+        font-family: 'Fredoka One', Arial, sans-serif;
       }
 
       canvas {
         display: block;
         border: none;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
         background-color: #4ec0ca;
         width: 100%;
         max-width: 400px;
+        border-radius: 12px;
       }
 
       .overlay {
@@ -40,50 +41,84 @@
         text-align: center;
         pointer-events: none;
         background-color: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(3px);
+        transition: all 0.3s ease;
       }
 
       .overlay-text {
         margin-bottom: 20px;
         text-shadow: 2px 2px 4px #000000;
+        animation: float 2s ease-in-out infinite;
+      }
+
+      @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
       }
 
       .overlay-button {
-        padding: 10px 20px;
-        background-color: rgba(255, 255, 255, 0.3);
+        padding: 12px 24px;
+        background-color: #FF6B6B;
         border: 2px solid white;
-        border-radius: 5px;
+        border-radius: 50px;
         cursor: pointer;
         pointer-events: auto;
         font-size: 0.8em;
-        text-shadow: 2px 2px 4px #000000;
+        text-shadow: 1px 1px 2px #000000;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      .overlay-button:hover {
+        transform: scale(1.05);
+        background-color: #FF8E8E;
       }
 
       .score-display {
         position: absolute;
-        top: 10px;
-        left: 10px;
+        top: 20px;
+        left: 20px;
         color: white;
         font-size: 1.5em;
         text-shadow: 2px 2px 4px #000000;
+        background-color: rgba(0, 0, 0, 0.2);
+        padding: 5px 10px;
+        border-radius: 20px;
       }
 
       .high-score-display {
         position: absolute;
-        top: 10px;
-        right: 10px;
-        color: rgba(255, 255, 255, 0.8);
+        top: 20px;
+        right: 20px;
+        color: rgba(255, 255, 255, 0.9);
         font-size: 1em;
         text-shadow: 1px 1px 2px #000000;
         text-align: right;
+        background-color: rgba(0, 0, 0, 0.2);
+        padding: 5px 10px;
+        border-radius: 20px;
       }
 
       .collected-letters-display {
         position: absolute;
-        bottom: 10px;
-        left: 10px;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
         color: white;
-        font-size: 1em;
+        font-size: 1.2em;
         text-shadow: 1px 1px 2px #000000;
+        background-color: rgba(0, 0, 0, 0.2);
+        padding: 5px 15px;
+        border-radius: 20px;
+        text-align: center;
+      }
+
+      @font-face {
+        font-family: 'Fredoka One';
+        font-style: normal;
+        font-weight: 400;
+        src: url(https://fonts.gstatic.com/s/fredokaone/v8/k3kUo8kEI-tA1RRcTZGmTlHGCac.woff2) format('woff2');
+        font-display: swap;
       }
     </style>
   </head>
@@ -94,10 +129,10 @@
     <div id="highScoreDisplay" class="high-score-display">High Score: 0</div>
     <div id="collectedLettersDisplay" class="collected-letters-display">Letters:</div>
 
-    <audio id="flapSound" src="flap.wav" preload="auto"></audio>
-    <audio id="scoreSound" src="score.wav" preload="auto"></audio>
-    <audio id="collisionSound" src="collision.wav" preload="auto"></audio>
-    <audio id="letterSound" src="letter.wav" preload="auto"></audio>
+    <audio id="flapSound" src="flap.mp3" preload="auto"></audio>
+    <audio id="scoreSound" src="score.mp3" preload="auto"></audio>
+    <audio id="collisionSound" src="collision.mp3" preload="auto"></audio>
+    <audio id="letterSound" src="letter.mp3" preload="auto"></audio>
 
     <script>
       const canvas = document.getElementById("gameCanvas");
@@ -119,42 +154,122 @@
       let currentWord = wordsToCollect[currentWordIndex];
       let collectedWordLetters = [];
 
+      // Create particle system
+      class ParticleSystem {
+        constructor() {
+          this.particles = [];
+        }
+        
+        createParticles(x, y, color, count = 10) {
+          for (let i = 0; i < count; i++) {
+            this.particles.push({
+              x, 
+              y,
+              size: Math.random() * 5 + 2,
+              speedX: Math.random() * 6 - 3,
+              speedY: Math.random() * 6 - 3,
+              color,
+              life: 1.0
+            });
+          }
+        }
+        
+        update() {
+          for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.x += p.speedX;
+            p.y += p.speedY;
+            p.life -= 0.02;
+            
+            if (p.life <= 0) {
+              this.particles.splice(i, 1);
+            }
+          }
+        }
+        
+        draw() {
+          for (const p of this.particles) {
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+        }
+      }
+      
+      const particles = new ParticleSystem();
+
       class Bird {
         constructor() {
           this.x = 80;
           this.y = 200;
-          this.size = 25;
+          this.size = 28;
           this.velocityY = 0;
           this.gravity = 0.6;
           this.jumpStrength = -12;
+          this.rotation = 0;
+          this.wingFrame = 0;
+          this.wingFrameCount = 0;
         }
 
         draw() {
+          ctx.save();
+          ctx.translate(this.x, this.y);
+          
+          // Calculate rotation based on velocity
+          this.rotation = Math.min(Math.PI/6, Math.max(-Math.PI/6, this.velocityY * 0.04));
+          ctx.rotate(this.rotation);
+          
+          // Draw shadow
+          ctx.font = `${this.size}px serif`;
+          ctx.fillStyle = "rgba(0,0,0,0.3)";
+          ctx.fillText(birdEmoji, -this.size / 2 + 2, this.size / 2 - 3);
+          
+          // Draw bird
           ctx.font = `${this.size}px serif`;
           ctx.fillStyle = "white";
           ctx.shadowColor = "black";
           ctx.shadowOffsetX = 2;
           ctx.shadowOffsetY = 2;
           ctx.shadowBlur = 3;
-          ctx.fillText(birdEmoji, this.x - this.size / 2, this.y + this.size / 2 - 5);
+          ctx.fillText(birdEmoji, -this.size / 2, this.size / 2 - 5);
           ctx.shadowColor = "transparent";
+          
+          ctx.restore();
+          
+          // Create trail effect
+          if (Math.random() > 0.8) {
+            particles.createParticles(this.x - this.size/2, this.y, "#FFD700", 1);
+          }
         }
 
         update() {
           this.velocityY += this.gravity;
           this.y += this.velocityY;
+          
+          // Wing animation
+          this.wingFrameCount++;
+          if (this.wingFrameCount > 5) {
+            this.wingFrame = (this.wingFrame + 1) % 3;
+            this.wingFrameCount = 0;
+          }
         }
 
         jump() {
           this.velocityY = this.jumpStrength;
+          this.wingFrame = 0;
+          this.wingFrameCount = 0;
           playSound(flapSound);
+          particles.createParticles(this.x, this.y + this.size/2, "#FFFFFF", 5);
         }
       }
 
       class Pipe {
         constructor(x, letter) {
           this.x = x;
-          this.width = 60;
+          this.width = 70;
           this.gap = 160;
           this.speed = 2.5;
           this.minHeight = 50;
@@ -164,29 +279,78 @@
           this.bottomPipeY = this.topPipeHeight + this.gap;
           this.letter = letter;
           this.collected = false;
+          this.highlight = false;
+          this.highlightIntensity = 0;
         }
 
         draw() {
+          // Pipe body gradient
           const pipeGradient = ctx.createLinearGradient(this.x, 0, this.x + this.width, 0);
           pipeGradient.addColorStop(0, "#32CD32");
           pipeGradient.addColorStop(1, "#228B22");
+          
+          if (this.highlight) {
+            this.highlightIntensity = Math.min(1, this.highlightIntensity + 0.1);
+          } else {
+            this.highlightIntensity = Math.max(0, this.highlightIntensity - 0.05);
+          }
+          
+          // Apply highlight effect
+          if (this.highlightIntensity > 0) {
+            ctx.shadowColor = "#FFFF00";
+            ctx.shadowBlur = 15 * this.highlightIntensity;
+          }
+          
+          // Draw pipe bodies
           ctx.fillStyle = pipeGradient;
           ctx.fillRect(this.x, 0, this.width, this.topPipeHeight);
           ctx.fillRect(this.x, this.bottomPipeY, this.width, canvas.height - this.bottomPipeY);
+          
+          // Draw pipe edges (rounded for top pipe)
           ctx.fillStyle = "#228B22";
-          ctx.fillRect(this.x - 5, this.topPipeHeight - 20, this.width + 10, 20);
+          
+          // Top pipe cap with rounded corners
+          ctx.beginPath();
+          const radius = 10;
+          ctx.moveTo(this.x - 5, this.topPipeHeight - 20 + radius);
+          ctx.lineTo(this.x - 5, this.topPipeHeight);
+          ctx.lineTo(this.x + this.width + 5, this.topPipeHeight);
+          ctx.lineTo(this.x + this.width + 5, this.topPipeHeight - 20 + radius);
+          ctx.arcTo(this.x + this.width + 5, this.topPipeHeight - 20, this.x + this.width + 5 - radius, this.topPipeHeight - 20, radius);
+          ctx.lineTo(this.x - 5 + radius, this.topPipeHeight - 20);
+          ctx.arcTo(this.x - 5, this.topPipeHeight - 20, this.x - 5, this.topPipeHeight - 20 + radius, radius);
+          ctx.fill();
+          
+          // Bottom pipe cap
           ctx.fillRect(this.x - 5, this.bottomPipeY, this.width + 10, 20);
+          
+          // Reset shadow
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
+          
+          // Draw letter if not collected
           if (!this.collected) {
-            ctx.fillStyle = "white";
-            ctx.font = "24px Arial";
+            // Draw letter background
+            const letterY = this.topPipeHeight + this.gap / 2;
+            ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+            ctx.beginPath();
+            ctx.arc(this.x + this.width / 2, letterY, 18, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw letter
+            ctx.fillStyle = this.wordLettersNeeded && this.wordLettersNeeded[0] === this.letter ? "#FF6B6B" : "#333";
+            ctx.font = "bold 24px 'Fredoka One', Arial";
             ctx.textAlign = "center";
-            ctx.fillText(this.letter, this.x + this.width / 2, this.topPipeHeight + this.gap / 2 + 8);
+            ctx.textBaseline = "middle";
+            ctx.fillText(this.letter, this.x + this.width / 2, letterY);
             ctx.textAlign = "start";
+            ctx.textBaseline = "alphabetic";
           }
         }
 
         update() {
           this.x -= this.speed;
+          this.highlight = (game.wordLettersNeeded.length > 0 && this.letter === game.wordLettersNeeded[0]);
         }
       }
 
@@ -200,6 +364,9 @@
         highScore: localStorage.getItem("highScore") || 0,
         collectedLetters: [],
         wordLettersNeeded: [],
+        groundOffset: 0,
+        cloudOffset: 0,
+        rainbowMode: false,
 
         resetGame() {
           this.bird = new Bird();
@@ -217,22 +384,25 @@
           this.updateScoreDisplay();
           this.updateHighScoreDisplay();
           this.updateCollectedLettersDisplay();
+          this.rainbowMode = false;
         },
 
         generateWordPipes() {
           this.pipes = [];
           let currentX = canvas.width;
           for (let i = 0; i < currentWord.length; i++) {
-            this.pipes.push(new Pipe(currentX, currentWord[i]));
+            const pipe = new Pipe(currentX, currentWord[i]);
+            pipe.wordLettersNeeded = this.wordLettersNeeded;
+            this.pipes.push(pipe);
             currentX += this.pipeSpacing * 2;
           }
           for (let i = 0; i < 5; i++) {
-            this.pipes.push(
-              new Pipe(
-                currentX,
-                availableLetters.charAt(Math.floor(Math.random() * availableLetters.length))
-              )
+            const pipe = new Pipe(
+              currentX,
+              availableLetters.charAt(Math.floor(Math.random() * availableLetters.length))
             );
+            pipe.wordLettersNeeded = this.wordLettersNeeded;
+            this.pipes.push(pipe);
             currentX += this.pipeSpacing;
           }
         },
@@ -246,37 +416,122 @@
         },
 
         updateCollectedLettersDisplay() {
-          collectedLettersDisplay.textContent = `Word: ${collectedWordLetters.join(
-            ""
-          )} - Find: ${currentWord}`;
+          const wordText = collectedWordLetters.join("");
+          const remaining = currentWord.slice(wordText.length);
+          
+          collectedLettersDisplay.innerHTML = `
+            <span style="color:#4EC0CA;font-weight:bold">${wordText}</span>
+            <span style="color:rgba(255,255,255,0.7)">${remaining}</span>
+            (${currentWordIndex + 1}/${wordsToCollect.length})
+          `;
         },
 
         drawBackground() {
+          // Sky gradient
           const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height - 100);
-          skyGradient.addColorStop(0, "#71c5cf");
-          skyGradient.addColorStop(1, "#a0d6e4");
+          skyGradient.addColorStop(0, "#63C5DA");
+          skyGradient.addColorStop(1, "#A0D6E4");
           ctx.fillStyle = skyGradient;
           ctx.fillRect(0, 0, canvas.width, canvas.height - 100);
+          
+          // Move clouds
+          this.cloudOffset = (this.cloudOffset + 0.2) % (canvas.width * 2);
+          
+          // Draw multiple cloud layers for parallax effect
+          this.drawClouds(this.cloudOffset * 0.5, 80, 0.7);
+          this.drawClouds(this.cloudOffset * 0.3, 150, 0.5);
+          
+          // Ground gradient
           const groundGradient = ctx.createLinearGradient(0, canvas.height - 100, 0, canvas.height);
-          groundGradient.addColorStop(0, "#daa520");
-          groundGradient.addColorStop(1, "#b8860b");
+          groundGradient.addColorStop(0, "#DAA520");
+          groundGradient.addColorStop(1, "#B8860B");
           ctx.fillStyle = groundGradient;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.fillStyle = "white";
-          ctx.globalAlpha = 0.7;
+          ctx.fillRect(0, canvas.height - 100, canvas.width, 100);
+          
+          // Draw ground texture
+          this.groundOffset = (this.groundOffset + 2) % 40;
+          ctx.fillStyle = "rgba(178, 120, 34, 0.5)";
+          for (let i = 0; i < canvas.width + 40; i += 40) {
+            ctx.beginPath();
+            ctx.arc(i - this.groundOffset, canvas.height - 50, 20, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          
+          // Sun/moon
+          ctx.fillStyle = "rgba(255, 235, 153, 0.8)";
           ctx.beginPath();
-          ctx.arc(50, 70, 30, 0, Math.PI * 2);
-          ctx.arc(90, 70, 20, 0, Math.PI * 2);
-          ctx.arc(70, 50, 25, 0, Math.PI * 2);
-          ctx.closePath();
+          ctx.arc(canvas.width - 60, 60, 40, 0, Math.PI * 2);
           ctx.fill();
+          
+          // Sun rays
+          if (!this.rainbowMode) {
+            ctx.strokeStyle = "rgba(255, 235, 153, 0.4)";
+            ctx.lineWidth = 3;
+            for (let i = 0; i < 8; i++) {
+              const angle = (i / 8) * Math.PI * 2;
+              ctx.beginPath();
+              ctx.moveTo(
+                canvas.width - 60 + Math.cos(angle) * 45,
+                60 + Math.sin(angle) * 45
+              );
+              ctx.lineTo(
+                canvas.width - 60 + Math.cos(angle) * 65,
+                60 + Math.sin(angle) * 65
+              );
+              ctx.stroke();
+            }
+          } else {
+            // Rainbow mode background
+            this.drawRainbow();
+          }
+        },
+        
+        drawClouds(offset, yPos, alpha) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+          ctx.globalAlpha = alpha;
+          
+          // First cloud group
+          const x1 = -offset % (canvas.width * 2);
           ctx.beginPath();
-          ctx.arc(200, 120, 40, 0, Math.PI * 2);
-          ctx.arc(250, 120, 30, 0, Math.PI * 2);
-          ctx.arc(220, 90, 35, 0, Math.PI * 2);
-          ctx.closePath();
+          ctx.arc(x1 + 50, yPos, 30, 0, Math.PI * 2);
+          ctx.arc(x1 + 90, yPos, 25, 0, Math.PI * 2);
+          ctx.arc(x1 + 70, yPos - 20, 25, 0, Math.PI * 2);
           ctx.fill();
+          
+          // Second cloud group
+          const x2 = x1 + canvas.width;
+          ctx.beginPath();
+          ctx.arc(x2 + 40, yPos + 30, 25, 0, Math.PI * 2);
+          ctx.arc(x2 + 70, yPos + 30, 30, 0, Math.PI * 2);
+          ctx.arc(x2 + 55, yPos + 10, 20, 0, Math.PI * 2);
+          ctx.fill();
+          
           ctx.globalAlpha = 1;
+        },
+        
+        drawRainbow() {
+          const centerX = canvas.width - 60;
+          const centerY = 60;
+          const radius = 80;
+          
+          const rainbowColors = [
+            '#FF0000', '#FF7F00', '#FFFF00', 
+            '#00FF00', '#0000FF', '#4B0082', '#8B00FF'
+          ];
+          
+          for (let i = 0; i < rainbowColors.length; i++) {
+            ctx.strokeStyle = rainbowColors[i];
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.arc(
+              centerX, 
+              centerY, 
+              radius + i * 8, 
+              Math.PI, 
+              Math.PI * 1.5
+            );
+            ctx.stroke();
+          }
         },
 
         drawPipes() {
@@ -296,6 +551,17 @@
               this.score++;
               this.updateScoreDisplay();
               playSound(scoreSound);
+              
+              // Add a new pipe if needed
+              if (this.pipes.length < 8) {
+                const lastPipe = this.pipes[this.pipes.length - 1];
+                const newPipe = new Pipe(
+                  lastPipe.x + this.pipeSpacing,
+                  availableLetters.charAt(Math.floor(Math.random() * availableLetters.length))
+                );
+                newPipe.wordLettersNeeded = this.wordLettersNeeded;
+                this.pipes.push(newPipe);
+              }
             }
 
             if (
@@ -310,14 +576,20 @@
                 this.wordLettersNeeded.shift();
                 this.updateCollectedLettersDisplay();
                 playSound(letterSound);
+                particles.createParticles(pipe.x + pipe.width / 2, pipe.topPipeHeight + pipe.gap / 2, "#FFD700", 20);
+                
                 if (this.wordLettersNeeded.length === 0) {
                   currentWordIndex++;
                   if (currentWordIndex < wordsToCollect.length) {
-                    currentWord = wordsToCollect[currentWordIndex];
-                    game.resetGame();
+                    setTimeout(() => {
+                      currentWord = wordsToCollect[currentWordIndex];
+                      this.resetGame();
+                      this.startGame();
+                    }, 1000);
                   } else {
                     currentWord = "YOU WIN!";
                     this.gameOver = true;
+                    this.rainbowMode = true;
                   }
                 }
               } else if (!wordsToCollect[currentWordIndex]) {
@@ -334,6 +606,8 @@
             ) {
               this.gameOver = true;
               playSound(collisionSound);
+              particles.createParticles(this.bird.x, this.bird.y, "#FF6347", 30);
+              
               if (this.score > this.highScore) {
                 this.highScore = this.score;
                 localStorage.setItem("highScore", this.highScore);
@@ -346,6 +620,11 @@
         updateGameArea() {
           this.drawBackground();
           this.drawPipes();
+          
+          // Update and draw particles
+          particles.update();
+          particles.draw();
+          
           this.bird.draw();
           this.updatePipes();
           this.bird.update();
@@ -356,6 +635,8 @@
           ) {
             this.gameOver = true;
             playSound(collisionSound);
+            particles.createParticles(this.bird.x, this.bird.y, "#FF6347", 30);
+            
             if (this.score > this.highScore) {
               this.highScore = this.score;
               localStorage.setItem("highScore", this.highScore);
@@ -420,7 +701,7 @@
         game.drawPipes();
         game.bird.draw();
         showOverlay(
-          "Tap or Space to Start<br>Flappy Bird Clone<br>Collect letters to form words!",
+          "Flappy Words!<br>Collect letters to form words!",
           "Start Game",
           game.startGame.bind(game)
         );
@@ -430,6 +711,8 @@
         game.drawBackground();
         game.drawPipes();
         game.bird.draw();
+        particles.draw();
+        
         let gameOverText = `Game Over!<br>Your Score: ${game.score} 💀`;
         if (currentWord === "YOU WIN!") {
           gameOverText = `🎉 YOU WIN! 🎉<br>You collected all words!`;
@@ -438,7 +721,7 @@
         }
         const highScoreText =
           game.score > game.highScore ? `<br>🎉 New High Score! 🎉` : `<br>High Score: ${game.highScore}`;
-        showOverlay(gameOverText + highScoreText, "Restart Game", game.resetGame.bind(game));
+        showOverlay(gameOverText + highScoreText, "Play Again", game.resetGame.bind(game));
       }
 
       document.addEventListener("keydown", function (event) {
@@ -452,8 +735,71 @@
 
       function playSound(audio) {
         audio.currentTime = 0;
-        audio.play();
+        audio.play().catch(e => console.log("Audio play failed:", e));
       }
+
+      // Generate sound effects procedurally if they don't exist
+      function generateSoundEffect(audioElement, type) {
+        if (!audioElement.src || audioElement.src === "") {
+          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          switch(type) {
+            case "flap":
+              oscillator.type = "sine";
+              oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+              oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.1);
+              gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+              gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+              oscillator.start();
+              oscillator.stop(audioContext.currentTime + 0.1);
+              break;
+            case "score":
+              oscillator.type = "sine";
+              oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+              oscillator.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + 0.1);
+              gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+              gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+              oscillator.start();
+              oscillator.stop(audioContext.currentTime + 0.1);
+              break;
+            case "collision":
+              oscillator.type = "sawtooth";
+              oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+              oscillator.frequency.linearRampToValueAtTime(50, audioContext.currentTime + 0.3);
+              gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+              gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+              oscillator.start();
+              oscillator.stop(audioContext.currentTime + 0.3);
+              break;
+            case "letter":
+              oscillator.type = "sine";
+              oscillator.frequency.setValueAtTime(900, audioContext.currentTime);
+              oscillator.frequency.exponentialRampToValueAtTime(1400, audioContext.currentTime + 0.15);
+              oscillator.frequency.exponentialRampToValueAtTime(900, audioContext.currentTime + 0.3);
+              gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+              gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+              oscillator.start();
+              oscillator.stop(audioContext.currentTime + 0.3);
+              break;
+          }
+          
+          return true;
+        }
+        return false;
+      }
+      
+      // Generate any missing sound effects
+      window.addEventListener('click', function() {
+        generateSoundEffect(flapSound, "flap");
+        generateSoundEffect(scoreSound, "score");
+        generateSoundEffect(collisionSound, "collision");
+        generateSoundEffect(letterSound, "letter");
+      }, {once: true});
 
       game.resetGame();
       drawStartScreen();
