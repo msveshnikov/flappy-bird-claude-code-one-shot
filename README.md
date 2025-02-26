@@ -75,5 +75,3 @@ A simple Flappy Bird game implemented using HTML5, CSS, and JavaScript.
     -   Provide alternative control schemes if possible to accommodate players with different needs.
 
 # TODO
-
--   add procedural generated sound effects
